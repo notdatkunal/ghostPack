@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PDFPack</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f172a;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+    }
+
+    .container {
+      text-align: center;
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      margin-bottom: 10px;
+    }
+
+    p {
+      color: #94a3b8;
+      margin-bottom: 30px;
+    }
+
+    .buttons {
+      display: flex;
+      gap: 20px;
+      justify-content: center;
+    }
+
+    a {
+      text-decoration: none;
+      padding: 14px 28px;
+      border-radius: 12px;
+      font-weight: 600;
+      transition: 0.2s;
+    }
+
+    .pack {
+      background: #22c55e;
+      color: #000;
+    }
+
+    .extract {
+      background: #3b82f6;
+      color: #fff;
+    }
+
+    a:hover {
+      transform: translateY(-2px);
+      opacity: 0.9;
+    }
+
+    footer {
+      margin-top: 40px;
+      font-size: 0.8rem;
+      color: #64748b;
+    }
+  </style>
+
+</head>
+
+<body>
+  <div class="container">
+    <h1>📦 PDFPack</h1>
+    <p>Embed and extract Python packages inside a PDF</p>
+
+```
+<div class="buttons">
+  <a href="pack.html" class="pack">Pack PDF</a>
+  <a href="extract.html" class="extract">Extract Packages</a>
+</div>
+
+<footer>
+  Works fully in your browser • No uploads • No backend
+</footer>
+```
+
+  </div>
+</body>
+</html>
