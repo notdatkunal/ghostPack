@@ -1,36 +1,145 @@
-<input type="file" id="pdfExtract">
-<button onclick="extract()">Extract</button>
-
-<script>
-async function extract() {
-  const file = document.getElementById("pdfExtract").files[0];
-  const buffer = new Uint8Array(await file.arrayBuffer());
-
-  const markerStr = "===PYPI_BUNDLE===\n";
-  const marker = new TextEncoder().encode(markerStr);
-
-  // find marker
-  let idx = -1;
-  for (let i = 0; i < buffer.length - marker.length; i++) {
-    let found = true;
-    for (let j = 0; j < marker.length; j++) {
-      if (buffer[i + j] !== marker[j]) {
-        found = false;
-        break;
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Extract Bundled Archive</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        color: #c9d1d9;
+        background: #0b1220;
       }
-    }
-    if (found) {
-      idx = i;
-      break;
-    }
-  }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+        display: grid;
+        place-items: center;
+        padding: 1.5rem;
+        background: radial-gradient(circle at bottom right, rgba(56, 139, 253, 0.14), transparent 30%),
+          linear-gradient(180deg, #020617 0%, #09111e 100%);
+      }
+      main {
+        width: min(100%, 520px);
+        padding: 2rem;
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        border-radius: 24px;
+        background: rgba(15, 23, 42, 0.92);
+        box-shadow: 0 28px 80px rgba(0, 0, 0, 0.28);
+      }
+      h1 {
+        margin: 0 0 0.5rem;
+        font-size: clamp(2rem, 4vw, 2.4rem);
+      }
+      p {
+        margin: 0 0 1.5rem;
+        line-height: 1.75;
+        color: #8b949e;
+      }
+      label {
+        display: block;
+        margin: 1rem 0 0.375rem;
+        font-size: 0.95rem;
+        color: #c9d1d9;
+      }
+      input[type="file"] {
+        width: 100%;
+        padding: 0.95rem 1rem;
+        border-radius: 14px;
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        background: rgba(255, 255, 255, 0.06);
+        color: #f0f6fc;
+      }
+      button {
+        width: 100%;
+        margin-top: 1.5rem;
+        padding: 1rem 1.1rem;
+        border: none;
+        border-radius: 14px;
+        font-size: 1rem;
+        font-weight: 700;
+        background: #238636;
+        color: white;
+        cursor: pointer;
+        transition: transform 0.2s ease, background 0.2s ease;
+      }
+      button:hover {
+        transform: translateY(-1px);
+        background: #2ea043;
+      }
+      footer {
+        margin-top: 1.75rem;
+        font-size: 0.87rem;
+        color: #8b949e;
+        line-height: 1.6;
+      }
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        background: rgba(148, 163, 184, 0.12);
+        padding: 0.15rem 0.35rem;
+        border-radius: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Extract Bundled Archive</h1>
+      <p>Select a bundled PDF file and extract the appended archive. The extracted archive will be downloaded as <code>packages.tar.gz</code>.</p>
+      <label for="pdfExtract">Select bundled PDF</label>
+      <input type="file" id="pdfExtract" accept="application/pdf" />
+      <button onclick="extract()">Extract Archive</button>
+      <footer>Use this page after packing a PDF with <code>pack.html</code>.</footer>
+    </main>
 
-  if (idx === -1) {
-    alert("No bundle found");
-    return;
-  }
+    <script>
+      async function extract() {
+        const file = document.getElementById("pdfExtract").files[0];
+        if (!file) {
+          alert("Please select a bundled PDF file.");
+          return;
+        }
 
-  const archive = buffer.slice(idx + marker.length);
-  download(archive, "packages.tar.gz");
-}
-</script>
+        const buffer = new Uint8Array(await file.arrayBuffer());
+        const markerStr = "===PYPI_BUNDLE===\n";
+        const marker = new TextEncoder().encode(markerStr);
+
+        let idx = -1;
+        for (let i = 0; i <= buffer.length - marker.length; i++) {
+          let found = true;
+          for (let j = 0; j < marker.length; j++) {
+            if (buffer[i + j] !== marker[j]) {
+              found = false;
+              break;
+            }
+          }
+          if (found) {
+            idx = i;
+            break;
+          }
+        }
+
+        if (idx === -1) {
+          alert("No bundle marker found in this file.");
+          return;
+        }
+
+        const archive = buffer.slice(idx + marker.length);
+        download(archive, "packages.tar.gz");
+      }
+
+      function download(data, filename) {
+        const blob = new Blob([data]);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    </script>
+  </body>
+</html>
