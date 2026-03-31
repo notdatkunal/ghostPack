@@ -1,0 +1,35 @@
+<input type="file" id="pdfInput">
+<input type="file" id="archiveInput">
+<button onclick="pack()">Pack</button>
+
+<script>
+const MARKER = new TextEncoder().encode("===PYPI_BUNDLE===\n");
+
+async function pack() {
+  const pdfFile = document.getElementById("pdfInput").files[0];
+  const archiveFile = document.getElementById("archiveInput").files[0];
+
+  const pdfBuffer = new Uint8Array(await pdfFile.arrayBuffer());
+  const archiveBuffer = new Uint8Array(await archiveFile.arrayBuffer());
+
+  const combined = new Uint8Array(
+    pdfBuffer.length + MARKER.length + archiveBuffer.length
+  );
+
+  combined.set(pdfBuffer, 0);
+  combined.set(MARKER, pdfBuffer.length);
+  combined.set(archiveBuffer, pdfBuffer.length + MARKER.length);
+
+  download(combined, "bundled.pdf");
+}
+
+function download(data, filename) {
+  const blob = new Blob([data]);
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+}
+</script>

@@ -1,0 +1,36 @@
+<input type="file" id="pdfExtract">
+<button onclick="extract()">Extract</button>
+
+<script>
+async function extract() {
+  const file = document.getElementById("pdfExtract").files[0];
+  const buffer = new Uint8Array(await file.arrayBuffer());
+
+  const markerStr = "===PYPI_BUNDLE===\n";
+  const marker = new TextEncoder().encode(markerStr);
+
+  // find marker
+  let idx = -1;
+  for (let i = 0; i < buffer.length - marker.length; i++) {
+    let found = true;
+    for (let j = 0; j < marker.length; j++) {
+      if (buffer[i + j] !== marker[j]) {
+        found = false;
+        break;
+      }
+    }
+    if (found) {
+      idx = i;
+      break;
+    }
+  }
+
+  if (idx === -1) {
+    alert("No bundle found");
+    return;
+  }
+
+  const archive = buffer.slice(idx + marker.length);
+  download(archive, "packages.tar.gz");
+}
+</script>
