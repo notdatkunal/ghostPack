@@ -1,6 +1,6 @@
-# PDF Drive
+# ghostPack
 
-A minimal Python proof of concept for embedding a ZIP archive inside a PDF file and extracting it later.
+A minimal proof of concept for embedding a ZIP archive inside a PDF file and extracting it later.
 
 ## Repository layout
 
@@ -42,5 +42,5 @@ A minimal Python proof of concept for embedding a ZIP archive inside a PDF file 
 
 ## Notes
 
-- This project is intended as a simple demo, not production-ready packaging software.
+- This project is intended as a simple demo, not production-ready ZIP packaging software.
 - Use a copy of your PDF if you want to preserve the original file before embedding data.
