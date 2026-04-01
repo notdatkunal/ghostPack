@@ -4,85 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Pack PDF Bundle</title>
+    <link rel="stylesheet" href="shared.css">
     <style>
-      :root {
-        color-scheme: dark;
-        color: #c9d1d9;
-        background: #0b1220;
-      }
-      * {
-        box-sizing: border-box;
-      }
       body {
-        margin: 0;
-        min-height: 100vh;
-        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-        display: grid;
-        place-items: center;
-        padding: 1.5rem;
         background: radial-gradient(circle at top, rgba(56, 139, 253, 0.13), transparent 32%),
           linear-gradient(180deg, #020617 0%, #09111e 100%);
       }
-      main {
-        width: min(100%, 520px);
-        padding: 2rem;
-        border: 1px solid rgba(148, 163, 184, 0.18);
-        border-radius: 24px;
-        background: rgba(15, 23, 42, 0.92);
-        box-shadow: 0 28px 80px rgba(0, 0, 0, 0.28);
-      }
-      h1 {
-        margin: 0 0 0.5rem;
-        font-size: clamp(2rem, 4vw, 2.4rem);
-        letter-spacing: -0.04em;
-      }
-      p {
-        margin: 0 0 1.5rem;
-        line-height: 1.75;
+
+      .file-info {
+        margin-top: 0.5rem;
+        font-size: 0.85rem;
         color: #8b949e;
-      }
-      label {
-        display: block;
-        margin: 1rem 0 0.375rem;
-        font-size: 0.95rem;
-        color: #c9d1d9;
-      }
-      input[type="file"] {
-        width: 100%;
-        padding: 0.95rem 1rem;
-        border-radius: 14px;
-        border: 1px solid rgba(148, 163, 184, 0.18);
-        background: rgba(255, 255, 255, 0.06);
-        color: #f0f6fc;
-      }
-      button {
-        width: 100%;
-        margin-top: 1.5rem;
-        padding: 1rem 1.1rem;
-        border: none;
-        border-radius: 14px;
-        font-size: 1rem;
-        font-weight: 700;
-        background: #238636;
-        color: white;
-        cursor: pointer;
-        transition: transform 0.2s ease, background 0.2s ease;
-      }
-      button:hover {
-        transform: translateY(-1px);
-        background: #2ea043;
-      }
-      footer {
-        margin-top: 1.75rem;
-        font-size: 0.87rem;
-        color: #8b949e;
-        line-height: 1.6;
-      }
-      code {
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-        background: rgba(148, 163, 184, 0.12);
-        padding: 0.15rem 0.35rem;
-        border-radius: 6px;
       }
     </style>
   </head>
@@ -90,47 +22,149 @@
     <main>
       <h1>Pack PDF Bundle</h1>
       <p>Combine a PDF and an archive into one bundled PDF file. The archive is appended after a marker so it can be extracted later.</p>
+      
+      <div id="error"></div>
+      
       <label for="pdfInput">Select PDF file</label>
       <input type="file" id="pdfInput" accept="application/pdf" />
+      <div class="file-info" id="pdfInfo"></div>
+      
       <label for="archiveInput">Select archive file</label>
-      <input type="file" id="archiveInput" accept="*/*" />
-      <button onclick="pack()">Create Bundled PDF</button>
-      <footer>Output file: <code>bundled.pdf</code></footer>
+      <input type="file" id="archiveInput" />
+      <div class="file-info" id="archiveInfo"></div>
+      
+      <button onclick="pack()" data-original-text="Create Bundled PDF">Create Bundled PDF</button>
+      
+      <div class="info" id="success">
+        ✓ Successfully created <code id="outputName"></code>
+      </div>
+      
+      <footer>
+        Supported archives: ZIP, TAR, TAR.GZ, 7Z, RAR, etc.
+        <br>Max file size: 2GB
+      </footer>
     </main>
 
+    <script src="utils.js"></script>
     <script>
-      const MARKER = new TextEncoder().encode("===PYPI_BUNDLE===\n");
+      const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024; // 2GB
+
+      // Show file info when selected
+      document.getElementById("pdfInput").addEventListener("change", (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          document.getElementById("pdfInfo").textContent = 
+            `${file.name} (${formatSize(file.size)})`;
+        }
+      });
+
+      document.getElementById("archiveInput").addEventListener("change", (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          document.getElementById("archiveInfo").textContent = 
+            `${file.name} (${formatSize(file.size)})`;
+        }
+      });
 
       async function pack() {
+        clearError();
+        
         const pdfFile = document.getElementById("pdfInput").files[0];
         const archiveFile = document.getElementById("archiveInput").files[0];
 
-        if (!pdfFile || !archiveFile) {
-          alert("Please select both a PDF and an archive.");
+        // Validation
+        if (!pdfFile) {
+          showError("Please select a PDF file.");
+          return;
+        }
+        
+        if (!archiveFile) {
+          showError("Please select an archive file.");
           return;
         }
 
-        const pdfBuffer = new Uint8Array(await pdfFile.arrayBuffer());
-        const archiveBuffer = new Uint8Array(await archiveFile.arrayBuffer());
+        if (!pdfFile.type || !pdfFile.type.includes("pdf")) {
+          showError("Selected file is not a PDF. Please select a valid PDF file.");
+          return;
+        }
 
-        const combined = new Uint8Array(pdfBuffer.length + MARKER.length + archiveBuffer.length);
-        combined.set(pdfBuffer, 0);
-        combined.set(MARKER, pdfBuffer.length);
-        combined.set(archiveBuffer, pdfBuffer.length + MARKER.length);
+        if (pdfFile.size === 0) {
+          showError("PDF file is empty.");
+          return;
+        }
 
-        download(combined, "bundled.pdf");
+        if (archiveFile.size === 0) {
+          showError("Archive file is empty.");
+          return;
+        }
+
+        if (pdfFile.size > MAX_FILE_SIZE || archiveFile.size > MAX_FILE_SIZE) {
+          showError(`File size exceeds 2GB limit.`);
+          return;
+        }
+
+        // Validate PDF header
+        try {
+          const pdfHeader = new Uint8Array(await pdfFile.slice(0, 5).arrayBuffer());
+          const headerStr = new TextDecoder().decode(pdfHeader);
+          if (!headerStr.startsWith("%PDF")) {
+            showError("Selected PDF file is invalid. File doesn't start with %PDF header.");
+            return;
+          }
+        } catch (e) {
+          showError("Error reading PDF file: " + e.message);
+          return;
+        }
+
+        setLoading(true);
+        document.querySelector("button").dataset.originalText = "Create Bundled PDF";
+
+        try {
+          const pdfBuffer = new Uint8Array(await pdfFile.arrayBuffer());
+          const archiveBuffer = new Uint8Array(await archiveFile.arrayBuffer());
+
+          // Create marker: MAGIC + VERSION + LENGTH (little-endian)
+          const markerHeader = MARKER.encode();
+          const lengthView = new DataView(markerHeader.buffer, 10, 4);
+          lengthView.setUint32(0, archiveBuffer.length, true); // true = little-endian
+
+          // Combine: PDF + MARKER + ARCHIVE
+          const combined = new Uint8Array(
+            pdfBuffer.length + markerHeader.length + archiveBuffer.length
+          );
+          combined.set(pdfBuffer, 0);
+          combined.set(markerHeader, pdfBuffer.length);
+          combined.set(archiveBuffer, pdfBuffer.length + markerHeader.length);
+
+          const outputName = "bundled_" + Date.now() + ".pdf";
+          download(combined, outputName);
+
+          // Show success message
+          document.getElementById("outputName").textContent = outputName;
+          document.getElementById("success").classList.add("show");
+          
+          // Reset form
+          setTimeout(() => {
+            document.getElementById("pdfInput").value = "";
+            document.getElementById("archiveInput").value = "";
+            document.getElementById("pdfInfo").textContent = "";
+            document.getElementById("archiveInfo").textContent = "";
+            document.getElementById("success").classList.remove("show");
+          }, 3000);
+
+        } catch (e) {
+          showError("Error creating bundle: " + e.message);
+        } finally {
+          setLoading(false);
+        }
       }
 
-      function download(data, filename) {
-        const blob = new Blob([data]);
-        const url = URL.createObjectURL(blob);
-
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = filename;
-        a.click();
-        URL.revokeObjectURL(url);
-      }
+      // Allow Enter key to submit
+      document.addEventListener("keypress", (e) => {
+        if (e.key === "Enter" && document.querySelector("button") && !document.querySelector("button").disabled) {
+          pack();
+        }
+      });
     </script>
   </body>
 </html>

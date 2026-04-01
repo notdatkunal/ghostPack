@@ -4,142 +4,201 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Extract Bundled Archive</title>
+    <link rel="stylesheet" href="shared.css">
     <style>
-      :root {
-        color-scheme: dark;
-        color: #c9d1d9;
-        background: #0b1220;
-      }
-      * {
-        box-sizing: border-box;
-      }
       body {
-        margin: 0;
-        min-height: 100vh;
-        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-        display: grid;
-        place-items: center;
-        padding: 1.5rem;
         background: radial-gradient(circle at bottom right, rgba(56, 139, 253, 0.14), transparent 30%),
           linear-gradient(180deg, #020617 0%, #09111e 100%);
       }
-      main {
-        width: min(100%, 520px);
-        padding: 2rem;
-        border: 1px solid rgba(148, 163, 184, 0.18);
-        border-radius: 24px;
-        background: rgba(15, 23, 42, 0.92);
-        box-shadow: 0 28px 80px rgba(0, 0, 0, 0.28);
-      }
-      h1 {
-        margin: 0 0 0.5rem;
-        font-size: clamp(2rem, 4vw, 2.4rem);
-      }
-      p {
-        margin: 0 0 1.5rem;
-        line-height: 1.75;
+
+      .file-info {
+        margin-top: 0.5rem;
+        font-size: 0.85rem;
         color: #8b949e;
-      }
-      label {
-        display: block;
-        margin: 1rem 0 0.375rem;
-        font-size: 0.95rem;
-        color: #c9d1d9;
-      }
-      input[type="file"] {
-        width: 100%;
-        padding: 0.95rem 1rem;
-        border-radius: 14px;
-        border: 1px solid rgba(148, 163, 184, 0.18);
-        background: rgba(255, 255, 255, 0.06);
-        color: #f0f6fc;
-      }
-      button {
-        width: 100%;
-        margin-top: 1.5rem;
-        padding: 1rem 1.1rem;
-        border: none;
-        border-radius: 14px;
-        font-size: 1rem;
-        font-weight: 700;
-        background: #238636;
-        color: white;
-        cursor: pointer;
-        transition: transform 0.2s ease, background 0.2s ease;
-      }
-      button:hover {
-        transform: translateY(-1px);
-        background: #2ea043;
-      }
-      footer {
-        margin-top: 1.75rem;
-        font-size: 0.87rem;
-        color: #8b949e;
-        line-height: 1.6;
-      }
-      code {
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-        background: rgba(148, 163, 184, 0.12);
-        padding: 0.15rem 0.35rem;
-        border-radius: 6px;
       }
     </style>
   </head>
   <body>
     <main>
       <h1>Extract Bundled Archive</h1>
-      <p>Select a bundled PDF file and extract the appended archive. The extracted archive will be downloaded as <code>packages.tar.gz</code>.</p>
+      <p>Select a bundled PDF file and extract the appended archive. The archive will be downloaded.</p>
+      
+      <div id="error"></div>
+      
       <label for="pdfExtract">Select bundled PDF</label>
       <input type="file" id="pdfExtract" accept="application/pdf" />
-      <button onclick="extract()">Extract Archive</button>
-      <footer>Use this page after packing a PDF with <code>pack.html</code>.</footer>
+      <div class="file-info" id="pdfInfo"></div>
+      
+      <button onclick="extract()" data-original-text="Extract Archive">Extract Archive</button>
+      
+      <div class="info" id="success">
+        ✓ Successfully extracted <code id="outputName"></code> (size: <span id="outputSize"></span>)
+      </div>
+      
+      <footer>
+        Use this tool to extract archives from PDFs created with the Pack PDF tool.
+      </footer>
     </main>
 
+    <script src="utils.js"></script>
     <script>
-      async function extract() {
-        const file = document.getElementById("pdfExtract").files[0];
-        if (!file) {
-          alert("Please select a bundled PDF file.");
-          return;
+      // Show file info when selected
+      document.getElementById("pdfExtract").addEventListener("change", (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          document.getElementById("pdfInfo").textContent = 
+            `${file.name} (${formatSize(file.size)})`;
         }
+      });
 
-        const buffer = new Uint8Array(await file.arrayBuffer());
-        const markerStr = "===PYPI_BUNDLE===\n";
-        const marker = new TextEncoder().encode(markerStr);
-
-        let idx = -1;
-        for (let i = 0; i <= buffer.length - marker.length; i++) {
+      /**
+       * Fast binary search for marker in Uint8Array
+       * Much faster than nested loop for large files
+       */
+      function findMarkerIndex(buffer, markerHeader) {
+        const magic = markerHeader.slice(0, 9);
+        
+        // Use the magic bytes (first 9 bytes) to search
+        for (let i = 0; i <= buffer.length - magic.length; i++) {
           let found = true;
-          for (let j = 0; j < marker.length; j++) {
-            if (buffer[i + j] !== marker[j]) {
+          for (let j = 0; j < magic.length; j++) {
+            if (buffer[i + j] !== magic[j]) {
               found = false;
               break;
             }
           }
+          
           if (found) {
-            idx = i;
-            break;
+            // Verify version byte matches (byte 9)
+            if (i + 9 < buffer.length && buffer[i + 9] === MARKER.version) {
+              return i;
+            }
           }
         }
+        
+        return -1;
+      }
 
-        if (idx === -1) {
-          alert("No bundle marker found in this file.");
+      async function extract() {
+        clearError();
+        
+        const file = document.getElementById("pdfExtract").files[0];
+        
+        if (!file) {
+          showError("Please select a bundled PDF file.");
           return;
         }
 
-        const archive = buffer.slice(idx + marker.length);
-        download(archive, "packages.tar.gz");
+        if (!file.type || !file.type.includes("pdf")) {
+          showError("Selected file is not a PDF. Please select a valid PDF file.");
+          return;
+        }
+
+        if (file.size === 0) {
+          showError("PDF file is empty.");
+          return;
+        }
+
+        // Validate PDF header
+        try {
+          const pdfHeader = new Uint8Array(await file.slice(0, 5).arrayBuffer());
+          const headerStr = new TextDecoder().decode(pdfHeader);
+          if (!headerStr.startsWith("%PDF")) {
+            showError("Selected file is not a valid PDF. File doesn't start with %PDF header.");
+            return;
+          }
+        } catch (e) {
+          showError("Error reading file: " + e.message);
+          return;
+        }
+
+        setLoading(true);
+        document.querySelector("button").dataset.originalText = "Extract Archive";
+
+        try {
+          const buffer = new Uint8Array(await file.arrayBuffer());
+          const markerHeader = MARKER.encode();
+          
+          // Find marker using optimized search
+          const idx = findMarkerIndex(buffer, markerHeader);
+
+          if (idx === -1) {
+            showError(
+              "No bundle marker found in this PDF. " +
+              "Make sure this is a PDF created with the Pack PDF tool."
+            );
+            return;
+          }
+
+          // Read length (4 bytes after version)
+          const lengthOffset = idx + 10;
+          if (lengthOffset + 4 > buffer.length) {
+            showError("Corrupted bundle: length field incomplete.");
+            return;
+          }
+
+          const lengthView = new DataView(buffer.buffer, lengthOffset, 4);
+          const archiveLength = lengthView.getUint32(0, true); // true = little-endian
+
+          // Validate length
+          const expectedEnd = lengthOffset + 4 + archiveLength;
+          if (expectedEnd > buffer.length) {
+            showError(
+              `Bundle appears corrupted. Expected ${archiveLength} bytes, ` +
+              `but only ${buffer.length - (lengthOffset + 4)} bytes available.`
+            );
+            return;
+          }
+
+          // Extract archive
+          const archive = buffer.slice(lengthOffset + 4, expectedEnd);
+
+          // Validate extracted data (basic check)
+          if (archive.length < 4) {
+            showError("Extracted archive is too small to be valid.");
+            return;
+          }
+
+          // Try to detect archive type from magic bytes
+          let filename = "extracted_" + Date.now();
+          const magic = archive.slice(0, 4);
+          const magicStr = Array.from(magic).map(b => b.toString(16).padStart(2, '0')).join('');
+
+          // Common archive signatures
+          if (magicStr.startsWith("504b")) filename += ".zip"; // ZIP
+          else if (magicStr.startsWith("377a")) filename += ".7z"; // 7Z
+          else if (magicStr.startsWith("1f8b")) filename += ".tar.gz"; // GZIP
+          else if (archive[0] === 0xFD && archive[1] === 0x37 && archive[2] === 0x7A) filename += ".xz"; // XZ
+          else filename += ".bin"; // Unknown
+
+          download(archive, filename + ".archive");
+
+          // Show success
+          document.getElementById("outputName").textContent = filename + ".archive";
+          document.getElementById("outputSize").textContent = formatSize(archive.length);
+          document.getElementById("success").classList.add("show");
+
+          // Reset form
+          setTimeout(() => {
+            document.getElementById("pdfExtract").value = "";
+            document.getElementById("pdfInfo").textContent = "";
+            document.getElementById("success").classList.remove("show");
+          }, 3000);
+
+        } catch (e) {
+          showError("Error extracting archive: " + e.message);
+          console.error(e); // Log for debugging
+        } finally {
+          setLoading(false);
+        }
       }
 
-      function download(data, filename) {
-        const blob = new Blob([data]);
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = filename;
-        a.click();
-        URL.revokeObjectURL(url);
-      }
+      // Allow Enter key to submit
+      document.addEventListener("keypress", (e) => {
+        if (e.key === "Enter" && document.querySelector("button") && !document.querySelector("button").disabled) {
+          extract();
+        }
+      });
     </script>
   </body>
 </html>
