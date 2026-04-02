@@ -44,7 +44,7 @@
         <br>Max file size: 2GB
       </footer>
     </main>
-
+<script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
     <script src="utils.js"></script>
     <script>
       const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024; // 2GB
@@ -67,98 +67,28 @@
       });
 
       async function pack() {
-        clearError();
-        
-        const pdfFile = document.getElementById("pdfInput").files[0];
-        const archiveFile = document.getElementById("archiveInput").files[0];
+        const pdfInput = document.getElementById("pdfInput");
+const zipInput = document.getElementById("archiveInput");
 
-        // Validation
-        if (!pdfFile) {
-          showError("Please select a PDF file.");
-          return;
-        }
-        
-        if (!archiveFile) {
-          showError("Please select an archive file.");
-          return;
-        }
+const pdfFile = pdfInput.files[0];
+const zipFile = zipInput.files[0];
+  const pdfBytes = await pdfFile.arrayBuffer();
+  const zipBytes = await zipFile.arrayBuffer();
 
-        if (!pdfFile.type || !pdfFile.type.includes("pdf")) {
-          showError("Selected file is not a PDF. Please select a valid PDF file.");
-          return;
-        }
+  const pdfDoc = await PDFLib.PDFDocument.load(pdfBytes);
 
-        if (pdfFile.size === 0) {
-          showError("PDF file is empty.");
-          return;
-        }
+  await pdfDoc.attach(zipBytes, zipFile.name, {
+    mimeType: "application/zip",
+    description: "ghostPack embedded archive",
+  });
 
-        if (archiveFile.size === 0) {
-          showError("Archive file is empty.");
-          return;
-        }
+  const newPdf = await pdfDoc.save();
+  const outputFilename = pdfFile.name.replace(/\.pdf$/i, "") + "-bundled.pdf";
+  download(newPdf, outputFilename);
 
-        if (pdfFile.size > MAX_FILE_SIZE || archiveFile.size > MAX_FILE_SIZE) {
-          showError(`File size exceeds 2GB limit.`);
-          return;
-        }
-
-        // Validate PDF header
-        try {
-          const pdfHeader = new Uint8Array(await pdfFile.slice(0, 5).arrayBuffer());
-          const headerStr = new TextDecoder().decode(pdfHeader);
-          if (!headerStr.startsWith("%PDF")) {
-            showError("Selected PDF file is invalid. File doesn't start with %PDF header.");
-            return;
-          }
-        } catch (e) {
-          showError("Error reading PDF file: " + e.message);
-          return;
-        }
-
-        setLoading(true);
-        document.querySelector("button").dataset.originalText = "Create Bundled PDF";
-
-        try {
-          const pdfBuffer = new Uint8Array(await pdfFile.arrayBuffer());
-          const archiveBuffer = new Uint8Array(await archiveFile.arrayBuffer());
-
-          // Create marker: MAGIC + VERSION + LENGTH (little-endian)
-          const markerHeader = MARKER.encode();
-          const lengthView = new DataView(markerHeader.buffer, 10, 4);
-          lengthView.setUint32(0, archiveBuffer.length, true); // true = little-endian
-
-          // Combine: PDF + MARKER + ARCHIVE
-          const combined = new Uint8Array(
-            pdfBuffer.length + markerHeader.length + archiveBuffer.length
-          );
-          combined.set(pdfBuffer, 0);
-          combined.set(markerHeader, pdfBuffer.length);
-          combined.set(archiveBuffer, pdfBuffer.length + markerHeader.length);
-
-          const outputName = "bundled_" + Date.now() + ".pdf";
-          download(combined, outputName);
-
-          // Show success message
-          document.getElementById("outputName").textContent = outputName;
-          document.getElementById("success").classList.add("show");
-          
-          // Reset form
-          setTimeout(() => {
-            document.getElementById("pdfInput").value = "";
-            document.getElementById("archiveInput").value = "";
-            document.getElementById("pdfInfo").textContent = "";
-            document.getElementById("archiveInfo").textContent = "";
-            document.getElementById("success").classList.remove("show");
-          }, 3000);
-
-        } catch (e) {
-          showError("Error creating bundle: " + e.message);
-        } finally {
-          setLoading(false);
-        }
-      }
-
+  document.getElementById("success").style.display = "block";
+  document.getElementById("outputName").textContent = outputFilename;
+}
       // Allow Enter key to submit
       document.addEventListener("keypress", (e) => {
         if (e.key === "Enter" && document.querySelector("button") && !document.querySelector("button").disabled) {
